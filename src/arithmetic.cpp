@@ -1,5 +1,9 @@
 #include <bls12-381/bls12-381.hpp>
-#ifdef __x86_64__
+
+// The x86_64 assembly in arithmetic.s uses ELF directives and serves x86_64 ELF targets only; every other target,
+// Apple x86_64 included, uses the C++ arithmetic in this file.
+#if defined(__x86_64__) && defined(__ELF__)
+#define BLS12_381_X86_64_ASM
 #include <cpuid.h>
 #endif
 
@@ -8,7 +12,7 @@ using namespace std;
 namespace bls12_381
 {
 
-#ifndef __x86_64__
+#ifndef BLS12_381_X86_64_ASM
 void _add(fp* z, const fp* x, const fp* y)
 {
     uint64_t carry, _;
@@ -115,7 +119,7 @@ void _lsubtract(fp* z, const fp* x, const fp* y)
 }
 #endif
 
-#ifdef __x86_64__
+#ifdef BLS12_381_X86_64_ASM
 void __negate(fp* z, const fp* x);
 void _negate(fp* z, const fp* x)
 {
@@ -144,7 +148,7 @@ void _negate(fp* z, const fp* x)
 }
 #endif
 
-#ifdef __x86_64__
+#ifdef BLS12_381_X86_64_ASM
 void __multiply(fp* z, const fp* x, const fp* y);
 void __mul_ex(fp* z, const fp* x, const fp* y);
 
@@ -163,7 +167,6 @@ static bool cpu_has_bmi2_and_adx() {
     return false;
 }
 
-#ifdef __ELF__
 extern "C" char** _dl_argv;
 
 extern "C" blsmul_func_t __attribute__((no_sanitize_address)) resolve_blsmul() {
@@ -181,18 +184,6 @@ extern "C" blsmul_func_t __attribute__((no_sanitize_address)) resolve_blsmul() {
 }
 
 void _multiply(fp*, const fp*, const fp*) __attribute__((ifunc("resolve_blsmul")));
-#else
-blsmul_func_t _multiply = __multiply;
-
-struct bls_mul_init {
-   bls_mul_init() {
-      if(cpu_has_bmi2_and_adx())
-         _multiply = __mul_ex;
-   }
-};
-static bls_mul_init the_bls_mul_init;
-
-#endif //__ELF__
 #else
 void _multiply(fp* z, const fp* x, const fp* y)
 {
@@ -316,7 +307,7 @@ void _multiply(fp* z, const fp* x, const fp* y)
 }
 #endif
 
-#ifdef __x86_64__
+#ifdef BLS12_381_X86_64_ASM
 void _square(fp* z, const fp* x)
 {
     __multiply(z, x, x);
