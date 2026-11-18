@@ -114,11 +114,11 @@ std::array<uint64_t, NC> add(const std::array<uint64_t, NA>& a, const std::array
     }
     if(carry > 0)
     {
-        if(NC <= N+1)
+        if(NC <= N)
         {
             throw std::invalid_argument("std::array c not large enough to store result!");
         }
-        c[N+1] = static_cast<uint64_t>(carry);
+        c[N] = static_cast<uint64_t>(carry);
     }
     return c;
 };

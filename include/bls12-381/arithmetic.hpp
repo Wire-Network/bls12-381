@@ -27,13 +27,7 @@ void _lsubtract(fp* z, const fp* x, const fp* y);
 // The "smaller than 4p" here means the montgomery form itself as number is less than 4p.
 // Therefore, at most ONE _ladd/_lsubstract/_ldouble is allowed before passing the result to _multiply,
 // unless the algorithm makes sure the number is small.
-#if defined(__x86_64__) && defined(__ELF__)
-extern void _multiply(fp*, const fp*, const fp*);
-#elif defined(__x86_64__)
-extern void (*_multiply)(fp*, const fp*, const fp*);
-#else
 void _multiply(fp*, const fp*, const fp*);
-#endif
 
 // Add64 returns the sum with carry of x, y and carry: sum = x + y + carry.
 // The carry input must be 0 or 1; otherwise the behavior is undefined.
@@ -95,35 +89,6 @@ std::tuple<uint64_t, uint64_t> madd2(
     const uint64_t& b,
     const uint64_t& c,
     const uint64_t& d
-);
-
-// madd2s superhi, hi, lo = 2*a*b + c + d + e
-std::tuple<uint64_t, uint64_t, uint64_t> madd2s(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& c,
-    const uint64_t& d,
-    const uint64_t& e
-);
-
-std::tuple<uint64_t, uint64_t, uint64_t> madd1s(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& d,
-    const uint64_t& e
-);
-
-std::tuple<uint64_t, uint64_t, uint64_t> madd2sb(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& c,
-    const uint64_t& e
-);
-
-std::tuple<uint64_t, uint64_t, uint64_t> madd1sb(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& e
 );
 
 std::tuple<uint64_t, uint64_t> madd3(

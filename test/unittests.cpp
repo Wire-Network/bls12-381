@@ -2,6 +2,7 @@
 #include <vector>
 #include <random>
 #include <iostream>
+#include <limits>
 
 #include <bls12-381/bls12-381.hpp>
 
@@ -85,6 +86,37 @@ void TestScalar()
 
         r = scalar::fromBytesBE<4>(scalar::toBytesBE(s));
         if(s != r) throw invalid_argument("BE: r != s");
+    }
+}
+
+void TestScalarAddCarry()
+{
+    const uint64_t M = numeric_limits<uint64_t>::max();
+
+    // The carry into the second limb meets a limb of all ones and must reach the third limb.
+    if(scalar::add<4, 4, 4>({1, 0, 0, 0}, {M, M, 0, 0}) != array<uint64_t, 4>{0, 0, 1, 0})
+    {
+        throw invalid_argument("scalar add lost a carry");
+    }
+
+    // The carry out of the top limb lands in the limb above it.
+    if(scalar::add<5, 4, 4>({M, M, M, M}, {1, 0, 0, 0}) != array<uint64_t, 5>{0, 0, 0, 0, 1})
+    {
+        throw invalid_argument("scalar add misplaced its carry");
+    }
+
+    bool threw = false;
+    try
+    {
+        scalar::add<4, 4, 4>({M, M, M, M}, {1, 0, 0, 0});
+    }
+    catch(const invalid_argument&)
+    {
+        threw = true;
+    }
+    if(!threw)
+    {
+        throw invalid_argument("scalar add dropped a carry it had no limb for");
     }
 }
 
@@ -385,6 +417,162 @@ void TestArithmeticOpraters() {
 
         TestHelperAddSubtractDouble(random_g1());
         TestHelperAddSubtractDouble(random_g2());
+    }
+}
+
+// 384-bit reference arithmetic on little-endian limbs for TestArithmeticCarryBoundaries, independent of the
+// library's carry helpers.
+typedef array<uint64_t, 6> limbs6;
+
+limbs6 RefAdd(const limbs6& x, const limbs6& y)
+{
+    limbs6 z;
+    uint128_t t = 0;
+    for(size_t i = 0; i < 6; i++)
+    {
+        t += static_cast<uint128_t>(x[i]) + y[i];
+        z[i] = static_cast<uint64_t>(t);
+        t >>= 64;
+    }
+    return z;
+}
+
+limbs6 RefSubtract(const limbs6& x, const limbs6& y, bool* borrow = nullptr)
+{
+    limbs6 z;
+    uint64_t b = 0;
+    for(size_t i = 0; i < 6; i++)
+    {
+        uint128_t t = static_cast<uint128_t>(x[i]) - y[i] - b;
+        z[i] = static_cast<uint64_t>(t);
+        b = static_cast<uint64_t>(t >> 64) & 1;
+    }
+    if(borrow)
+    {
+        *borrow = b != 0;
+    }
+    return z;
+}
+
+bool RefLess(const limbs6& x, const limbs6& y)
+{
+    for(size_t i = 6; i-- > 0;)
+    {
+        if(x[i] != y[i])
+        {
+            return x[i] < y[i];
+        }
+    }
+    return false;
+}
+
+// Field addition, subtraction and negation of values below the modulus, as _add, _subtract and _negate define them.
+limbs6 RefFieldAdd(const limbs6& x, const limbs6& y)
+{
+    limbs6 z = RefAdd(x, y);
+    return RefLess(z, fp::MODULUS.d) ? z : RefSubtract(z, fp::MODULUS.d);
+}
+
+limbs6 RefFieldSubtract(const limbs6& x, const limbs6& y)
+{
+    bool borrow;
+    limbs6 z = RefSubtract(x, y, &borrow);
+    return borrow ? RefAdd(z, fp::MODULUS.d) : z;
+}
+
+limbs6 RefFieldNegate(const limbs6& x)
+{
+    return x == limbs6{} ? x : RefSubtract(fp::MODULUS.d, x);
+}
+
+void CheckLimbs(const char* operation, const limbs6& x, const limbs6& y, const limbs6& expected, const limbs6& actual)
+{
+    if(expected != actual)
+    {
+        cout << operation << " of" << hex;
+        for(uint64_t limb : x) cout << " " << limb;
+        cout << " and";
+        for(uint64_t limb : y) cout << " " << limb;
+        cout << dec << endl;
+        throw invalid_argument(string(operation) + " lost a carry or borrow");
+    }
+}
+
+// Every value whose five low limbs are drawn from lowLimbs and whose top limb is 0 or one below the modulus's, and
+// p - 1.
+vector<limbs6> BoundaryValues(const vector<uint64_t>& lowLimbs)
+{
+    vector<limbs6> values;
+    size_t patterns = 1;
+    for(size_t i = 0; i < 5; i++)
+    {
+        patterns *= lowLimbs.size();
+    }
+    for(size_t pattern = 0; pattern < patterns; pattern++)
+    {
+        for(uint64_t top : {uint64_t{0}, fp::MODULUS.d[5] - 1})
+        {
+            limbs6 v;
+            size_t digits = pattern;
+            for(size_t i = 0; i < 5; i++, digits /= lowLimbs.size())
+            {
+                v[i] = lowLimbs[digits % lowLimbs.size()];
+            }
+            v[5] = top;
+            values.push_back(v);
+        }
+    }
+    values.push_back(RefSubtract(fp::MODULUS.d, {1, 0, 0, 0, 0, 0}));
+    return values;
+}
+
+// Adds, subtracts, doubles, negates and squares values whose limbs make carry and borrow chains run into a limb of all
+// ones with a carry or borrow coming in, or make a doubled product overflow its high limb.
+void TestArithmeticCarryBoundaries()
+{
+    const uint64_t M = numeric_limits<uint64_t>::max();
+    const uint64_t half = uint64_t{1} << 63;
+    const limbs6 pMinus1 = RefSubtract(fp::MODULUS.d, {1, 0, 0, 0, 0, 0});
+
+    // {M, 0, ...} + {1, M, 0, ...} is 2^128, and {0, M, 0, ...} - {1, M, 0, ...} is -1.
+    if(!fp({M, 0, 0, 0, 0, 0}).add(fp({1, M, 0, 0, 0, 0})).equal(fp({0, 0, 1, 0, 0, 0})))
+    {
+        throw invalid_argument("{M, 0} + {1, M} != 2^128");
+    }
+    if(!fp({0, M, 0, 0, 0, 0}).subtract(fp({1, M, 0, 0, 0, 0})).equal(fp(pMinus1)))
+    {
+        throw invalid_argument("{0, M} - {1, M} != p - 1");
+    }
+
+    for(const limbs6& x : BoundaryValues({0, 1, M - 1, M, half - 1, half}))
+    {
+        const fp fx(x);
+        fp z;
+        CheckLimbs("double", x, x, RefFieldAdd(x, x), fx.dbl().d);
+        _ldouble(&z, &fx);
+        CheckLimbs("lazy double", x, x, RefAdd(x, x), z.d);
+        CheckLimbs("negate", x, x, RefFieldNegate(x), fx.negate().d);
+        if(!fx.square().equal(fx.multiply(fx)))
+        {
+            throw invalid_argument("square != multiply at a carry boundary");
+        }
+    }
+
+    const vector<limbs6> values = BoundaryValues({0, 1, M});
+    for(const limbs6& x : values)
+    {
+        const fp fx(x);
+        fp z;
+        for(const limbs6& y : values)
+        {
+            const fp fy(y);
+            CheckLimbs("add", x, y, RefFieldAdd(x, y), fx.add(fy).d);
+            _ladd(&z, &fx, &fy);
+            CheckLimbs("lazy add", x, y, RefAdd(x, y), z.d);
+            CheckLimbs("subtract", x, y, RefFieldSubtract(x, y), fx.subtract(fy).d);
+            _lsubtract(&z, &fx, &fy);
+            CheckLimbs("lazy subtract", x, y, RefSubtract(x, y), z.d);
+        }
     }
 }
 
@@ -2300,6 +2488,7 @@ void TestOutOfRangeInputs() {
 int main()
 {
     TestScalar();
+    TestScalarAddCarry();
 
     TestFieldElementValidation();
     TestFieldElementEquality();
@@ -2309,6 +2498,7 @@ int main()
     TestFieldElementByteInputs();
 
     TestArithmeticOpraters();
+    TestArithmeticCarryBoundaries();
 
     TestSqrt();
     TestInverse();
