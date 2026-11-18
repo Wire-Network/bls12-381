@@ -93,6 +93,8 @@ void pre_compute(array<array<fp2, 3>, 68>& ellCoeffs, const g2& twistPoint)
     }
 }
 
+/// Returns fp12::one() for an empty span. `yield`, when set, is called after each pair's line coefficients are
+/// computed and after each pair's line evaluation in every loop step; what it throws propagates.
 fp12 miller_loop(std::span<const std::tuple<g1, g2>> pairs, std::function<void()> yield)
 {
     vector<array<array<fp2, 3>, 68>> ellCoeffs;
@@ -100,10 +102,10 @@ fp12 miller_loop(std::span<const std::tuple<g1, g2>> pairs, std::function<void()
     for(uint64_t i = 0; i < pairs.size(); i++)
     {
         pre_compute(ellCoeffs[i], get<g2>(pairs[i]));
-    }
-    if(pairs.size() >= 20 && yield)
-    {
-        yield();
+        if(yield)
+        {
+            yield();
+        }
     }
     fp2 t[10];
     fp12 f = fp12::one();
@@ -114,20 +116,28 @@ fp12 miller_loop(std::span<const std::tuple<g1, g2>> pairs, std::function<void()
         {
             f = f.square();
         }
-        for(uint64_t j = 0; j <= pairs.size()-1; j++)
+        for(uint64_t j = 0; j < pairs.size(); j++)
         {
             t[0] = ellCoeffs[j][k][2].mulByFq(get<g1>(pairs[j]).y);
             t[1] = ellCoeffs[j][k][1].mulByFq(get<g1>(pairs[j]).x);
             f.mulBy014Assign(ellCoeffs[j][k][0], t[1], t[0]);
+            if(yield)
+            {
+                yield();
+            }
         }
         if(((g2::cofactorEFF[0] >> i) & 1) == 1)
         {
             k++;
-            for(uint64_t j = 0; j <= pairs.size()-1; j++)
+            for(uint64_t j = 0; j < pairs.size(); j++)
             {
                 t[0] = ellCoeffs[j][k][2].mulByFq(get<g1>(pairs[j]).y);
                 t[1] = ellCoeffs[j][k][1].mulByFq(get<g1>(pairs[j]).x);
                 f.mulBy014Assign(ellCoeffs[j][k][0], t[1], t[0]);
+                if(yield)
+                {
+                    yield();
+                }
             }
         }
         k++;
