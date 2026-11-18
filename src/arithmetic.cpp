@@ -1,8 +1,9 @@
 #include <bls12-381/bls12-381.hpp>
 
 // The x86_64 assembly in arithmetic.s uses ELF directives and serves x86_64 ELF targets only; every other target,
-// Apple x86_64 included, uses the C++ arithmetic in this file.
-#if defined(__x86_64__) && defined(__ELF__)
+// Apple x86_64 included, uses the C++ arithmetic in this file. BLS12_381_PORTABLE_ARITHMETIC selects the C++
+// arithmetic on every target; the tests build it that way to compare it with the assembly.
+#if defined(__x86_64__) && defined(__ELF__) && !defined(BLS12_381_PORTABLE_ARITHMETIC)
 #define BLS12_381_X86_64_ASM
 #include <cpuid.h>
 #endif
@@ -315,107 +316,7 @@ void _square(fp* z, const fp* x)
 #else
 void _square(fp* z, const fp* x)
 {
-    array<uint64_t, 6> p;
-    uint64_t u, v;
-    {
-        // round 0
-        tie(u, p[0]) = Mul64(x->d[0], x->d[0]);
-        uint64_t m = p[0] * fp::INP;
-        uint64_t C = madd0(m, fp::MODULUS.d[0], p[0]);
-        uint64_t t, _;
-        tie(t, u, v) = madd1sb(x->d[0], x->d[1], u);
-        tie(C, p[0]) = madd2(m, fp::MODULUS.d[1], v, C);
-        tie(t, u, v) = madd1s(x->d[0], x->d[2], t, u);
-        tie(C, p[1]) = madd2(m, fp::MODULUS.d[2], v, C);
-        tie(t, u, v) = madd1s(x->d[0], x->d[3], t, u);
-        tie(C, p[2]) = madd2(m, fp::MODULUS.d[3], v, C);
-        tie(t, u, v) = madd1s(x->d[0], x->d[4], t, u);
-        tie(C, p[3]) = madd2(m, fp::MODULUS.d[4], v, C);
-        tie(_, u, v) = madd1s(x->d[0], x->d[5], t, u);
-        tie(p[5], p[4]) = madd3(m, fp::MODULUS.d[5], v, C, u);
-    }
-    {
-        // round 1
-        uint64_t m = p[0] * fp::INP;
-        uint64_t C = madd0(m, fp::MODULUS.d[0], p[0]);
-        tie(u, v) = madd1(x->d[1], x->d[1], p[1]);
-        tie(C, p[0]) = madd2(m, fp::MODULUS.d[1], v, C);
-        uint64_t t, _;
-        tie(t, u, v) = madd2sb(x->d[1], x->d[2], p[2], u);
-        tie(C, p[1]) = madd2(m, fp::MODULUS.d[2], v, C);
-        tie(t, u, v) = madd2s(x->d[1], x->d[3], p[3], t, u);
-        tie(C, p[2]) = madd2(m, fp::MODULUS.d[3], v, C);
-        tie(t, u, v) = madd2s(x->d[1], x->d[4], p[4], t, u);
-        tie(C, p[3]) = madd2(m, fp::MODULUS.d[4], v, C);
-        tie(_, u, v) = madd2s(x->d[1], x->d[5], p[5], t, u);
-        tie(p[5], p[4]) = madd3(m, fp::MODULUS.d[5], v, C, u);
-    }
-    {
-        // round 2
-        uint64_t m = p[0] * fp::INP;
-        uint64_t C = madd0(m, fp::MODULUS.d[0], p[0]);
-        tie(C, p[0]) = madd2(m, fp::MODULUS.d[1], p[1], C);
-        tie(u, v) = madd1(x->d[2], x->d[2], p[2]);
-        tie(C, p[1]) = madd2(m, fp::MODULUS.d[2], v, C);
-        uint64_t t, _;
-        tie(t, u, v) = madd2sb(x->d[2], x->d[3], p[3], u);
-        tie(C, p[2]) = madd2(m, fp::MODULUS.d[3], v, C);
-        tie(t, u, v) = madd2s(x->d[2], x->d[4], p[4], t, u);
-        tie(C, p[3]) = madd2(m, fp::MODULUS.d[4], v, C);
-        tie(_, u, v) = madd2s(x->d[2], x->d[5], p[5], t, u);
-        tie(p[5], p[4]) = madd3(m, fp::MODULUS.d[5], v, C, u);
-    }
-    {
-        // round 3
-        uint64_t m = p[0] * fp::INP;
-        uint64_t C = madd0(m, fp::MODULUS.d[0], p[0]);
-        tie(C, p[0]) = madd2(m, fp::MODULUS.d[1], p[1], C);
-        tie(C, p[1]) = madd2(m, fp::MODULUS.d[2], p[2], C);
-        tie(u, v) = madd1(x->d[3], x->d[3], p[3]);
-        tie(C, p[2]) = madd2(m, fp::MODULUS.d[3], v, C);
-        uint64_t t, _;
-        tie(t, u, v) = madd2sb(x->d[3], x->d[4], p[4], u);
-        tie(C, p[3]) = madd2(m, fp::MODULUS.d[4], v, C);
-        tie(_, u, v) = madd2s(x->d[3], x->d[5], p[5], t, u);
-        tie(p[5], p[4]) = madd3(m, fp::MODULUS.d[5], v, C, u);
-    }
-    {
-        // round 4
-        uint64_t m = p[0] * fp::INP;
-        uint64_t C = madd0(m, fp::MODULUS.d[0], p[0]);
-        tie(C, p[0]) = madd2(m, fp::MODULUS.d[1], p[1], C);
-        tie(C, p[1]) = madd2(m, fp::MODULUS.d[2], p[2], C);
-        tie(C, p[2]) = madd2(m, fp::MODULUS.d[3], p[3], C);
-        tie(u, v) = madd1(x->d[4], x->d[4], p[4]);
-        tie(C, p[3]) = madd2(m, fp::MODULUS.d[4], v, C);
-        uint64_t _;
-        tie(_, u, v) = madd2sb(x->d[4], x->d[5], p[5], u);
-        tie(p[5], p[4]) = madd3(m, fp::MODULUS.d[5], v, C, u);
-    }
-    {
-        // round 5
-        uint64_t m = p[0] * fp::INP;
-        uint64_t C = madd0(m, fp::MODULUS.d[0], p[0]);
-        tie(C, z->d[0]) = madd2(m, fp::MODULUS.d[1], p[1], C);
-        tie(C, z->d[1]) = madd2(m, fp::MODULUS.d[2], p[2], C);
-        tie(C, z->d[2]) = madd2(m, fp::MODULUS.d[3], p[3], C);
-        tie(C, z->d[3]) = madd2(m, fp::MODULUS.d[4], p[4], C);
-        tie(u, v) = madd1(x->d[5], x->d[5], p[5]);
-        tie(z->d[5], z->d[4]) = madd3(m, fp::MODULUS.d[5], v, C, u);
-    }
-
-    // if z > q --> z -= q
-    // note: this is NOT constant time
-    if(!(z->d[5] < fp::MODULUS.d[5] || (z->d[5] == fp::MODULUS.d[5] && (z->d[4] < fp::MODULUS.d[4] || (z->d[4] == fp::MODULUS.d[4] && (z->d[3] < fp::MODULUS.d[3] || (z->d[3] == fp::MODULUS.d[3] && (z->d[2] < fp::MODULUS.d[2] || (z->d[2] == fp::MODULUS.d[2] && (z->d[1] < fp::MODULUS.d[1] || (z->d[1] == fp::MODULUS.d[1] && (z->d[0] < fp::MODULUS.d[0]))))))))))))
-    {
-        uint64_t b, _;
-        tie(z->d[0], b) = Sub64(z->d[0], fp::MODULUS.d[0], 0);
-        tie(z->d[1], b) = Sub64(z->d[1], fp::MODULUS.d[1], b);
-        tie(z->d[2], b) = Sub64(z->d[2], fp::MODULUS.d[2], b);
-        tie(z->d[3], b) = Sub64(z->d[3], fp::MODULUS.d[3], b);
-        tie(z->d[4], b) = Sub64(z->d[4], fp::MODULUS.d[4], b);
-        tie(z->d[5], _) = Sub64(z->d[5], fp::MODULUS.d[5], b);
-    }
+    _multiply(z, x, x);
 }
 #endif
 
@@ -430,9 +331,11 @@ tuple<uint64_t, uint64_t> Add64(
     const uint64_t& carry
 )
 {
-    uint64_t sum = (x + y) + carry;
-    uint64_t carryOut = (sum < x);
-    return {sum, carryOut};
+    // Overflow builtins: exact carry and borrow out for a carry or borrow in of 0 or 1, compiled to add with carry.
+    uint64_t sum;
+    const bool carryXY = __builtin_add_overflow(x, y, &sum);
+    const bool carryIn = __builtin_add_overflow(sum, carry, &sum);
+    return {sum, static_cast<uint64_t>(carryXY | carryIn)};
 }
 
 // Sub64 returns the difference of x, y and borrow: diff = x - y - borrow.
@@ -446,9 +349,10 @@ tuple<uint64_t, uint64_t> Sub64(
     const uint64_t& borrow
 )
 {
-    uint64_t diff = x - y - borrow;
-    uint64_t borrowOut = (diff > x);
-    return {diff, borrowOut};
+    uint64_t diff;
+    const bool borrowXY = __builtin_sub_overflow(x, y, &diff);
+    const bool borrowIn = __builtin_sub_overflow(diff, borrow, &diff);
+    return {diff, static_cast<uint64_t>(borrowXY | borrowIn)};
 }
 
 // Mul64 returns the 128-bit product of x and y: (hi, lo) = x * y
@@ -526,83 +430,6 @@ tuple<uint64_t, uint64_t> madd2(
     tie(lo, carry) = Add64(lo, _c, 0);
     tie(hi, _) = Add64(hi, 0, carry);
     return {hi, lo};
-}
-
-// madd2s superhi, hi, lo = 2*a*b + c + d + e
-tuple<uint64_t, uint64_t, uint64_t> madd2s(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& c,
-    const uint64_t& d,
-    const uint64_t& e
-)
-{
-    uint64_t carry, sum, superhi, hi, lo, _;
-
-    tie(hi, lo) = Mul64(a, b);
-    tie(lo, carry) = Add64(lo, lo, 0);
-    tie(hi, superhi) = Add64(hi, hi, carry);
-
-    tie(sum, carry) = Add64(c, e, 0);
-    tie(hi, _) = Add64(hi, 0, carry);
-    tie(lo, carry) = Add64(lo, sum, 0);
-    tie(hi, _) = Add64(hi, 0, carry);
-    tie(hi, _) = Add64(hi, 0, d);
-    return {superhi, hi, lo};
-}
-
-tuple<uint64_t, uint64_t, uint64_t> madd1s(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& d,
-    const uint64_t& e
-)
-{
-    uint64_t carry, superhi, hi, lo, _;
-
-    tie(hi, lo) = Mul64(a, b);
-    tie(lo, carry) = Add64(lo, lo, 0);
-    tie(hi, superhi) = Add64(hi, hi, carry);
-    tie(lo, carry) = Add64(lo, e, 0);
-    tie(hi, _) = Add64(hi, 0, carry);
-    tie(hi, _) = Add64(hi, 0, d);
-    return {superhi, hi, lo};
-}
-
-tuple<uint64_t, uint64_t, uint64_t> madd2sb(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& c,
-    const uint64_t& e
-)
-{
-    uint64_t carry, sum, superhi, hi, lo, _;
-
-    tie(hi, lo) = Mul64(a, b);
-    tie(lo, carry) = Add64(lo, lo, 0);
-    tie(hi, superhi) = Add64(hi, hi, carry);
-
-    tie(sum, carry) = Add64(c, e, 0);
-    tie(hi, _) = Add64(hi, 0, carry);
-    tie(lo, carry) = Add64(lo, sum, 0);
-    tie(hi, _) = Add64(hi, 0, carry);
-    return {superhi, hi, lo};
-}
-
-tuple<uint64_t, uint64_t, uint64_t> madd1sb(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& e
-)
-{
-    uint64_t carry, superhi, hi, lo, _;
-
-    tie(hi, lo) = Mul64(a, b);
-    tie(lo, carry) = Add64(lo, lo, 0);
-    tie(hi, superhi) = Add64(hi, hi, carry);
-    tie(lo, carry) = Add64(lo, e, 0);
-    tie(hi, _) = Add64(hi, 0, carry);
-    return {superhi, hi, lo};
 }
 
 tuple<uint64_t, uint64_t> madd3(

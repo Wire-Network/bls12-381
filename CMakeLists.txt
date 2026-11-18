@@ -17,6 +17,7 @@ target_compile_features(bls12-381 PUBLIC cxx_std_20)
 
 # arithmetic.s uses ELF directives; Apple and Windows targets use the C++ arithmetic in src/arithmetic.cpp.
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 AND NOT APPLE AND NOT WIN32)
+  set(BLS12_381_X86_64_ASM ON)
   target_sources(bls12-381 PRIVATE src/arithmetic.s)
   set_source_files_properties(src/arithmetic.s PROPERTIES COMPILE_FLAGS "-Wno-unused-command-line-argument")
 endif()

@@ -91,35 +91,6 @@ std::tuple<uint64_t, uint64_t> madd2(
     const uint64_t& d
 );
 
-// madd2s superhi, hi, lo = 2*a*b + c + d + e
-std::tuple<uint64_t, uint64_t, uint64_t> madd2s(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& c,
-    const uint64_t& d,
-    const uint64_t& e
-);
-
-std::tuple<uint64_t, uint64_t, uint64_t> madd1s(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& d,
-    const uint64_t& e
-);
-
-std::tuple<uint64_t, uint64_t, uint64_t> madd2sb(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& c,
-    const uint64_t& e
-);
-
-std::tuple<uint64_t, uint64_t, uint64_t> madd1sb(
-    const uint64_t& a,
-    const uint64_t& b,
-    const uint64_t& e
-);
-
 std::tuple<uint64_t, uint64_t> madd3(
     const uint64_t& a,
     const uint64_t& b,
